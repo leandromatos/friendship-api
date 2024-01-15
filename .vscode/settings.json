@@ -5,6 +5,7 @@
   "typescript.preferences.quoteStyle": "single",
   "files.associations": {
     ".env": "properties",
+    ".env.debug": "properties",
     ".env.test": "properties"
   },
   "yaml.schemas": {
