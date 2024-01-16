@@ -1,0 +1,20 @@
+version: '3.8'
+name: 'friendship_api_test'
+services:
+  database:
+    container_name: friendship_api_test_database
+    image: postgres:latest
+    environment:
+      POSTGRES_USER: root
+      POSTGRES_PASSWORD: root
+      POSTGRES_DB: friendship_api_test
+    ports:
+      - '5433:5432'
+    volumes:
+      - database:/var/lib/postgresql/data
+    networks:
+      - friendship_api_test
+volumes:
+  database:
+networks:
+  friendship_api_test:

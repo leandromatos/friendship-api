@@ -16,7 +16,12 @@
       "statements": 10
     }
   },
-  "coveragePathIgnorePatterns": ["<rootDir>/main.ts"],
+  "coveragePathIgnorePatterns": [
+    "<rootDir>/__tests__/utils",
+    "<rootDir>/database/clients/prisma",
+    "<rootDir>/main.ts",
+    "<rootDir>/types"
+  ],
   "moduleNameMapper": {
     "^@/(.*)$": "<rootDir>/$1"
   }

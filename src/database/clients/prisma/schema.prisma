@@ -1,0 +1,34 @@
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String    @id(map: "pk_users_id") @default(uuid())
+  name      String?
+  email     String    @unique
+  friend    Friends[] @relation("friend")
+  friendOf  Friends[] @relation("friendOf")
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@map("users")
+}
+
+model Friends {
+  friend     User     @relation("friend", fields: [friendId], references: [id])
+  friendId   String
+  friendOf   User     @relation("friendOf", fields: [friendOfId], references: [id])
+  friendOfId String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@id([friendId, friendOfId])
+  @@index([friendId, friendOfId], name: "idx_friends_friend_id_friend_of_id")
+  @@map("friends")
+}
