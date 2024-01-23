@@ -165,12 +165,15 @@ export class UsersRepository {
    * @returns A Promise resolving to an array of User objects representing first-degree friends.
    */
   async findFirstDegreeFriends(userId: string): Promise<User[]> {
-    const directFriends = await this.databaseService.friends.findMany({
-      where: { friendOfId: userId },
-      include: { friend: true },
-    })
+    const directFriends = await this.databaseService.$queryRaw<User[]>`
+      SELECT u.*
+      FROM users u
+      INNER JOIN friends f ON f."friendId" = u.id
+      WHERE f."friendOfId" = ${userId}
+      ORDER BY u.id;
+    `
 
-    return directFriends.map(friendship => friendship.friend)
+    return directFriends
   }
 
   /**
@@ -181,31 +184,29 @@ export class UsersRepository {
    * - Best practices not included:
    *   - Pagination: Implementing pagination can significantly reduce the load on the database by fetching friends in manageable batches.
    *   - Caching: Caching results for users with a stable network can improve performance.
-   *   - Optimizing Query: Consider more efficient querying techniques or using a database that supports recursive queries for better performance.
    *
    * @param userId - The ID of the user whose second-degree friends are to be found.
    * @returns A Promise resolving to an array of User objects representing second-degree friends.
    */
 
   async findSecondDegreeFriends(userId: string): Promise<User[]> {
-    const firstDegreeFriends = await this.databaseService.friends.findMany({
-      where: { friendOfId: userId },
-      select: { friendId: true },
-    })
-
-    const secondDegreeFriendsIds = new Set<string>()
-    for (const friendship of firstDegreeFriends) {
-      const friendsOfFriend = await this.databaseService.friends.findMany({
-        where: { friendOfId: friendship.friendId },
-        select: { friendId: true },
-      })
-
-      friendsOfFriend.forEach(f => secondDegreeFriendsIds.add(f.friendId))
-    }
-
-    const secondDegreeFriends = await this.databaseService.user.findMany({
-      where: { id: { in: Array.from(secondDegreeFriendsIds) } },
-    })
+    const secondDegreeFriends = await this.databaseService.$queryRaw<User[]>`
+      WITH RECURSIVE friends_cte AS (
+        SELECT f."friendId", 1 AS degree
+        FROM friends f
+        WHERE f."friendOfId" = ${userId}
+        UNION ALL
+        SELECT f."friendId", fc."degree" + 1
+        FROM friends f
+        INNER JOIN friends_cte fc ON f."friendOfId" = fc."friendId"
+        WHERE fc."degree" = 1 AND f."friendId" != ${userId}
+      )
+      SELECT DISTINCT u.*
+      FROM friends_cte fc
+      JOIN users u ON u.id = fc."friendId"
+      WHERE fc."degree" = 2
+      ORDER BY u.id;
+    `
 
     return secondDegreeFriends
   }
@@ -218,7 +219,6 @@ export class UsersRepository {
    * - Best practices not included:
    *   - Pagination: Essential for managing the potentially large result set and reducing database load.
    *   - Caching: Beneficial for users with infrequently changing friend networks.
-   *   - Query Optimization: Look into more advanced database features or alternative data models that can handle such complex queries more efficiently.
    *   - Asynchronous Processing: For very large datasets, consider processing the query asynchronously and notifying the user when the results are ready.
    *
    * Caution: This function can be very resource-intensive and should be optimized or used with caution.
@@ -227,21 +227,27 @@ export class UsersRepository {
    * @returns A Promise resolving to an array of User objects representing third-degree friends.
    */
   async findThirdDegreeFriends(userId: string): Promise<User[]> {
-    const secondDegreeFriends = await this.findSecondDegreeFriends(userId)
-
-    const thirdDegreeFriendsIds = new Set<string>()
-    for (const friend of secondDegreeFriends) {
-      const friendsOfFriend = await this.databaseService.friends.findMany({
-        where: { friendOfId: friend.id },
-        select: { friendId: true },
-      })
-
-      friendsOfFriend.forEach(f => thirdDegreeFriendsIds.add(f.friendId))
-    }
-
-    const thirdDegreeFriends = await this.databaseService.user.findMany({
-      where: { id: { in: Array.from(thirdDegreeFriendsIds) } },
-    })
+    const thirdDegreeFriends = await this.databaseService.$queryRaw<User[]>`
+      WITH RECURSIVE friends_cte AS (
+        SELECT f."friendId", 1 AS degree
+        FROM friends f
+        WHERE f."friendOfId" = ${userId}
+        UNION ALL
+        SELECT f."friendId", fc."degree" + 1
+        FROM friends f
+        INNER JOIN friends_cte fc ON f."friendOfId" = fc."friendId"
+        WHERE fc.degree < 3 AND f."friendId" NOT IN (
+          SELECT f2."friendId"
+          FROM friends f2
+          WHERE f2."friendOfId" = ${userId}
+        )
+      )
+      SELECT DISTINCT u.*
+      FROM friends_cte fc
+      JOIN users u ON u.id = fc."friendId"
+      WHERE fc."degree" = 3
+      ORDER BY u.id;  -- Pagination
+    `
 
     return thirdDegreeFriends
   }
